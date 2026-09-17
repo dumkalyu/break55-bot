@@ -389,8 +389,6 @@ def run_nightly(send=True, save=True):
         print("Первый запуск: восстанавливаю, какие позиции система держала бы сейчас...")
         state = dict(positions={}, pending={}, pending_exit={}, last_day=None,
                      started=str(days[-1].date()))
-        for d in days[-REPLAY_DAYS:-1]:
-            step(state, data, d, new_events(), [], live=False)
         todo = [days[-1]]
     else:
         todo = [d for d in days if str(d.date()) > state["last_day"]]
