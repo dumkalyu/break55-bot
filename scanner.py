@@ -75,11 +75,16 @@ def bybit_stocks():
 
 def universe():
     sp = sp500_now()
+    cache = os.path.join(HERE, "bybit_list.csv")
     try:
         bb = bybit_stocks()
+        pd.DataFrame([dict(base=k, symbol=v["symbol"]) for k, v in bb.items()]).to_csv(cache, index=False)
     except Exception as e:
-        print("Bybit не ответил:", str(e)[:100])
+        print("Bybit не ответил (с серверов США он закрыт), беру сохранённый список:", str(e)[:80])
         bb = {}
+        if os.path.exists(cache):
+            for r in pd.read_csv(cache).itertuples():
+                bb[r.base] = dict(symbol=r.symbol)
     uni = {}
     for t in sp:
         key = t.replace(".", "")
@@ -87,6 +92,8 @@ def universe():
         if ONLY_BYBIT and not info:
             continue
         uni[t] = info or {}
+    if not uni:
+        raise RuntimeError("Не удалось получить список акций Bybit.")
     return uni
 
 
