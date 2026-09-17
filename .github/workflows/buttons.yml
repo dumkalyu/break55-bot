@@ -1,0 +1,45 @@
+name: Кнопки
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"    # проверка нажатых кнопок каждые 30 минут
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bot-state
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install requests
+      - name: Есть ли новые команды
+        id: check
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: python gh_poll.py --check >> "$GITHUB_OUTPUT"
+      - if: steps.check.outputs.has == '1'
+        run: pip install -r requirements.txt
+      - name: Ответить
+        if: steps.check.outputs.has == '1'
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+        run: python gh_poll.py
+      - name: Сохранить
+        if: steps.check.outputs.has == '1'
+        run: |
+          git config user.name "break55-bot"
+          git config user.email "break55-bot@users.noreply.github.com"
+          for f in bot_state.json paper_journal.csv bot_offset.txt; do [ -f "$f" ] && git add "$f"; done
+          git diff --cached --quiet || (git commit -m "кнопки" && git pull --rebase && git push)

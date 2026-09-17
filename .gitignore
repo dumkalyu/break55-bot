@@ -1,0 +1,6 @@
+telegram_token.txt
+telegram_chat.txt
+eodhd_key.txt
+data/
+__pycache__/
+*.part
