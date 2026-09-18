@@ -36,7 +36,8 @@ STATE = os.path.join(HERE, "bot_state.json")
 JOURNAL = os.path.join(HERE, "paper_journal.csv")
 SP_FILE = os.path.join(HERE, "data", "sp500_hist.csv")
 REPLAY_DAYS = 260          # при первом запуске: какие позиции система держала бы сейчас
-FUND_WARN = 0.0015         # плата за удержание выше 0.15% в месяц - предупреждение
+FUND_WARN = 0.0015
+WATCH_NIGHT = 0.02         # в ночном сообщении: акции не дальше 2% от цены покупки         # плата за удержание выше 0.15% в месяц - предупреждение
 NY = ZoneInfo("America/New_York")
 
 
@@ -284,6 +285,11 @@ def build_message(state, data, uni, day, ev, journal):
             L.append(f"• {t} — {pct:+.1%} с покупки")
     L.append("")
 
+    rows = watch_rows(data, state, day, WATCH_NIGHT)
+    L.append(f"👀 <b>За чем следить</b> (до цены покупки не больше {WATCH_NIGHT:.0%}):")
+    L += watch_lines(rows, uni, 12) if rows else ["• нет"]
+    L.append("")
+
     pl = position_lines(state, data, day)
     if pl:
         L.append(f"📂 <b>Что сейчас куплено по системе ({len(pl)}):</b>")
@@ -432,10 +438,8 @@ def earnings_soon(ticker, days_ahead=14):
     return ""
 
 
-def watch_message(top=15, max_dist=0.05):
-    uni, data = market_data()
-    state = load_state() or dict(positions={}, pending={}, pending_exit={})
-    day = data["SPY"].index[-1]
+def watch_rows(data, state, day, max_dist):
+    """Акции в росте, которым осталось меньше max_dist до цены покупки."""
     rows = []
     for t, d in data.items():
         if t == "SPY" or t in state["positions"] or t in state["pending"] or d.index[-1] != day:
@@ -448,13 +452,12 @@ def watch_message(top=15, max_dist=0.05):
         if dist <= max_dist:
             rows.append((dist, t, b, lvl))
     rows.sort(key=lambda x: x[0])
-    L = [f"<b>🔎 За чем следить · закрытие {day.date():%d.%m.%Y}</b>",
-         f"Акции в росте, которым до сигнала «купить» осталось меньше {max_dist:.0%}. "
-         f"Сигнал будет, если цена ЗАКРОЕТ день выше своего максимума за {bt.CH_IN} дней (уровень).", ""]
-    if not rows:
-        L.append("Близких к пробою бумаг нет.")
+    return rows
+
+
+def watch_lines(rows, uni, top):
+    L = []
     for dist, t, b, lvl in rows[:top]:
-        atrs = (lvl - b.C) / b.atr
         u = uni.get(t, {})
         fm = u.get("funding_month")
         fs = "" if fm is None else f" · Bybit {fm:.2%}/мес" + (" ⚠️" if fm > FUND_WARN else "")
@@ -463,6 +466,20 @@ def watch_message(top=15, max_dist=0.05):
                  f"ещё {dist:.1%} · убыток при стопе до {risk:.0%}{fs}{earnings_soon(t)}")
     if len(rows) > top:
         L.append(f"…и ещё {len(rows) - top}.")
+    return L
+
+
+def watch_message(top=15, max_dist=0.05):
+    uni, data = market_data()
+    state = load_state() or dict(positions={}, pending={}, pending_exit={})
+    day = data["SPY"].index[-1]
+    rows = watch_rows(data, state, day, max_dist)
+    L = [f"<b>🔎 За чем следить · закрытие {day.date():%d.%m.%Y}</b>",
+         f"Акции в росте, которым до сигнала «купить» осталось меньше {max_dist:.0%}. "
+         f"Сигнал будет, если цена ЗАКРОЕТ день выше своего максимума за {bt.CH_IN} дней (уровень).", ""]
+    if not rows:
+        L.append("Близких к пробою бумаг нет.")
+    L += watch_lines(rows, uni, top)
     L += ["", "«отчёт ⚠️» — скоро отчётность компании, цена может резко прыгнуть.",
           "«Bybit …/мес» — сколько биржа берёт за удержание позиции в месяц.",
           "Это список для наблюдения, а не совет покупать."]
