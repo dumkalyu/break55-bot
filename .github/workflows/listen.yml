@@ -1,0 +1,28 @@
+name: Кнопки (постоянно)
+
+on:
+  schedule:
+    - cron: "5 * * * *"      # каждый час; каждая смена длится 55 минут
+  workflow_dispatch: {}
+
+concurrency:
+  group: listen
+  cancel-in-progress: false
+
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Слушать Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+          LISTEN_MINUTES: "55"
+        run: python gh_listen.py
