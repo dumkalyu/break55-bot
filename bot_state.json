@@ -1,7 +1,16 @@
 {
  "positions": {},
- "pending": {},
+ "pending": {
+  "CRWD": {
+   "sig_date": "2026-09-17",
+   "atr": 12.246098011969694
+  },
+  "DELL": {
+   "sig_date": "2026-09-17",
+   "atr": 32.95647634931489
+  }
+ },
  "pending_exit": {},
- "last_day": "2026-09-16",
+ "last_day": "2026-09-17",
  "started": "2026-09-16"
 }
