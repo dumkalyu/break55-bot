@@ -222,9 +222,11 @@ def pc(x, sign=False):
     return format(x, f)
 
 
-def position_lines(state, data, day):
+def position_lines(state, data, day, only_live=True):
     rows = []
     for t, p in state["positions"].items():
+        if only_live and not p.get("live"):
+            continue
         d = data.get(t)
         if d is None or day not in d.index:
             continue
@@ -232,14 +234,13 @@ def position_lines(state, data, day):
         c = dd.C.iloc[-1]
         pct = c / p["entry"] - 1
         lvl = dd.L.iloc[-bt.CH_OUT:].min()     # закрытие ниже этого уровня = продать
-        old = "" if p.get("live") else " 📜"
         if t in state.get("pending_exit", {}):
             tail = "ПРОДАТЬ завтра на открытии"
         elif p["stop"] > lvl:
             tail = f"стоп {fmt_money(p['stop'])} (на {pc(max(0, 1 - p['stop'] / c))} ниже цены)"
         else:
             tail = f"продать, если день закроется ниже {fmt_money(lvl)} (на {pc(max(0, 1 - lvl / c))} ниже цены)"
-        rows.append((pct, f"• <b>{t}</b>{old}: {pc(pct, True)} с покупки · {tail}"))
+        rows.append((pct, f"• <b>{t}</b>: {pc(pct, True)} с покупки · {tail}"))
     return [s for _, s in sorted(rows, reverse=True)]
 
 
@@ -290,12 +291,15 @@ def build_message(state, data, uni, day, ev, journal):
     L += watch_lines(rows, uni, 12) if rows else ["• нет"]
     L.append("")
 
+    hidden = sum(1 for p in state["positions"].values() if not p.get("live"))
+    if hidden:
+        L.append(f"(система держит ещё {hidden} бумаг по сигналам до запуска бота — их не показываю "
+                 "и покупать их не нужно)")
+        L.append("")
     pl = position_lines(state, data, day)
     if pl:
         L.append(f"📂 <b>Что сейчас куплено по системе ({len(pl)}):</b>")
         L += pl
-        if any("📜" in s for s in pl):
-            L.append("📜 — куплено по расчёту на истории, ещё до запуска бота; в итоги не идёт.")
         L.append("")
 
     j = pd.DataFrame(journal)
@@ -395,6 +399,8 @@ def run_nightly(send=True, save=True):
         print("Первый запуск: восстанавливаю, какие позиции система держала бы сейчас...")
         state = dict(positions={}, pending={}, pending_exit={}, last_day=None,
                      started=str(days[-1].date()))
+        for d in days[-REPLAY_DAYS:-1]:
+            step(state, data, d, new_events(), [], live=False)
         todo = [days[-1]]
     else:
         todo = [d for d in days if str(d.date()) > state["last_day"]]
@@ -494,9 +500,12 @@ def positions_message():
     day = data["SPY"].index[-1]
     L = [f"<b>📋 Что куплено по системе · {day.date():%d.%m.%Y}</b>"]
     lines = position_lines(state, data, day)
+    if not lines:
+        L.append("• пока ничего (бот покупает только по новым сигналам)")
     L += [s + earnings_soon(s.split("<b>")[1].split("</b>")[0]) for s in lines]
-    if any("📜" in s for s in lines):
-        L.append("📜 — куплено по расчёту на истории, ещё до запуска бота.")
+    hidden = sum(1 for p in state["positions"].values() if not p.get("live"))
+    if hidden:
+        L.append(f"Ещё {hidden} бумаг система держит по сигналам до запуска бота — покупать их не нужно.")
     if state.get("pending"):
         L.append("🟢 Купить завтра на открытии: " + ", ".join(sorted(state["pending"])))
     L.append("⚠️ отчёт — скоро отчётность компании, цена может резко прыгнуть.")
