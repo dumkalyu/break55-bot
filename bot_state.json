@@ -128,7 +128,9 @@
   }
  },
  "pending": {},
- "pending_exit": {},
- "last_day": "2026-09-17",
+ "pending_exit": {
+  "VRTX": "2026-09-18"
+ },
+ "last_day": "2026-09-18",
  "started": "2026-09-17"
 }
